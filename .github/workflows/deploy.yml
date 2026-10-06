@@ -1,0 +1,41 @@
+name: deploy
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url }}
+    steps:
+      - name: Fetch latest dashboard from private release
+        id: f
+        env:
+          GH_TOKEN: ${{ secrets.SRC_TOKEN }}
+        run: |
+          set -e
+          mkdir -p site
+          id=$(curl -sf -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" https://api.github.com/repos/IMH0202/ipo-tracker/releases/tags/latest | python3 -c "import sys,json;a=[x for x in json.load(sys.stdin)['assets'] if x['name']=='IPO_Tracker_web.html'];print(a[0]['id'] if a else '')")
+          test -n "$id"
+          curl -sfL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" -o site/index.html https://api.github.com/repos/IMH0202/ipo-tracker/releases/assets/$id
+          test $(stat -c%s site/index.html) -gt 1000000
+          touch site/.nojekyll
+          if curl -sfL https://imh0202.github.io/ipo-tracker-web/ -o old.html && cmp -s old.html site/index.html; then echo changed=false >> $GITHUB_OUTPUT; else echo changed=true >> $GITHUB_OUTPUT; fi
+      - uses: actions/configure-pages@v5
+        if: steps.f.outputs.changed == 'true'
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.f.outputs.changed == 'true'
+        with:
+          path: site
+      - id: d
+        if: steps.f.outputs.changed == 'true'
+        uses: actions/deploy-pages@v4
