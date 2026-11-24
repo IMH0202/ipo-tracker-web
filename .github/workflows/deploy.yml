@@ -11,11 +11,10 @@ concurrency:
   group: pages
   cancel-in-progress: false
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.d.outputs.page_url }}
+    outputs:
+      changed: ${{ steps.f.outputs.changed }}
     steps:
       - name: Fetch latest dashboard from private release
         id: f
@@ -32,10 +31,17 @@ jobs:
           if curl -sfL https://imh0202.github.io/ipo-tracker-web/ -o old.html && cmp -s old.html site/index.html; then echo changed=false >> $GITHUB_OUTPUT; else echo changed=true >> $GITHUB_OUTPUT; fi
       - uses: actions/configure-pages@v5
         if: steps.f.outputs.changed == 'true'
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         if: steps.f.outputs.changed == 'true'
         with:
           path: site
+  deploy:
+    needs: build
+    if: needs.build.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url }}
+    steps:
       - id: d
-        if: steps.f.outputs.changed == 'true'
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
